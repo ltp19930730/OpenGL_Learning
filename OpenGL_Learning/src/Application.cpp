@@ -113,6 +113,7 @@ int main(void)
     float inc4y = 0.002f;
     shader.setFloat("yOffset", y_offset);
 
+
     // Keep changing color for the fragment shader
     /*
     int location = glGetUniformLocation(shader, "u_Color");
