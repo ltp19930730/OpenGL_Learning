@@ -1,5 +1,4 @@
-#include <iostream>
-
+#include "Shader.h"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -26,81 +25,6 @@ static bool GLLogCall(const char* function, const char* file, int line) {
         return false;
     }
     return true;
-}
-
-struct ShaderProgramSource
-{
-    std::string VertextSource;
-    std::string FragmentSource;
-};
-
-static ShaderProgramSource ParseShader(const std::string& filepath) {
-    std::ifstream stream(filepath);
-
-    enum class ShaderType {
-        NONE = -1, VERTEX = 0, FRAGMENT = 1
-    };
-
-    std::string line;
-    std::stringstream ss[2];
-    ShaderType type = ShaderType::NONE;
-    while (getline(stream, line)) {
-        if (line.find("#shader") != std::string::npos) {
-            if (line.find("vertex") != std::string::npos) {
-                type = ShaderType::VERTEX;
-            }
-            else if (line.find("fragment") != std::string::npos) {
-                type = ShaderType::FRAGMENT;
-            }
-        }
-        else {
-            ss[(int)type] << line << '\n';
-        }
-    }
-
-    return { ss[0].str(), ss[1].str() };
-}
-
-static unsigned int compileShader(unsigned int type, const std::string& source) {
-    unsigned int id = glCreateShader(type);
-    const char* src = source.c_str();
-    glShaderSource(id, 1, &src, nullptr);
-    glCompileShader(id);
-
-    int res;
-    glGetShaderiv(id, GL_COMPILE_STATUS, &res);
-
-    if (res == GL_FALSE) {
-        int length;
-        glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-        char* message = (char*)alloca(length * sizeof(char));
-        glGetShaderInfoLog(id, length, &length, message);
-        std::cout << "Failed to compile" << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << std::endl;
-        std::cout << message << std::endl;
-        glDeleteShader(id);
-        return 0;
-    }
-
-
-    return id;
-}
-
-static unsigned int CreateShader(const std::string& vertextShader, 
-    const std::string& fragmentShader) {
-    unsigned int program = glCreateProgram();
-    unsigned int vs = compileShader(GL_VERTEX_SHADER, vertextShader);
-    unsigned int fs = compileShader(GL_FRAGMENT_SHADER, fragmentShader);
-
-
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-    glLinkProgram(program);
-    glValidateProgram(program);
-
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-
-    return program;
 }
 
 static int getSign(float val) {
@@ -139,11 +63,11 @@ int main(void)
 
     std::cout << glGetString(GL_VERSION) << std::endl;
 
-    float positions[] = {
-        -0.5f, -0.5f,
-         0.5f, -0.5f,
-         0.5f,  0.5f,
-         -0.5f, 0.5f
+    float vertices[] = {
+         0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,   // 右下
+        -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,   // 左下
+        -0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,   // 左上
+         0.5f,  0.5f, 0.0f,  1.0f, 1.0f, 1.0f    // 右上   
     };
 
     unsigned int indices[] = {
@@ -160,34 +84,49 @@ int main(void)
     GLCall(glBindVertexArray(VAO));
 
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, VBO));
-    GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW));
+    GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW));
 
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO));
     GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
+    // 位置属性
+    GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0));
     GLCall(glEnableVertexAttribArray(0));
-    GLCall(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
+    // 颜色属性
+    GLCall(glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float))));
+    glEnableVertexAttribArray(1);
 
-    GLCall(auto source = ParseShader("res/shaders/Basic.shader"));
-    GLCall(unsigned int shader = CreateShader(source.VertextSource, source.FragmentSource));
+    GLCall(auto shader = Shader("res/shaders/Basic.shader"));
 
     // PolygonMode
     // GLCall(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
 
     // Add shader program
-    GLCall(glUseProgram(shader));
+    GLCall(shader.use());
+
+
+    float x_offset = 0.0f;
+    float inc4x = 0.001f;
+    shader.setFloat("xOffset", x_offset);
+
+    float y_offset = 0.0f;
+    float inc4y = 0.002f;
+    shader.setFloat("yOffset", y_offset);
 
     // Keep changing color for the fragment shader
+    /*
     int location = glGetUniformLocation(shader, "u_Color");
     ASSERT(location != -1);
     float r = 0.3f, g = 0.8f, b = 0.2f;
     float r_inc = 0.003f, g_inc = 0.003f, b_inc = 0.003f;
+    */
 
     // Unblind everything
     GLCall(glBindVertexArray(0));
     GLCall(glUseProgram(0));
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
+
 
 
     /* Loop until the user closes the window */
@@ -199,19 +138,33 @@ int main(void)
         /* Render here */
         glClear(GL_COLOR_BUFFER_BIT);
 
-        GLCall(glUseProgram(shader));
-        GLCall(glUniform4f(location, r, g, b, 1.0f));
+        GLCall(shader.use());
+        //GLCall(glUniform4f(location, r, g, b, 1.0f));
 
         GLCall(glBindVertexArray(VAO));
 
         GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0));
 
+        x_offset += inc4x;
+        if (x_offset > 0.5f || x_offset < -0.5f) {
+            inc4x *= -1;
+        }
+        shader.setFloat("xOffset", x_offset);
+
+        y_offset += inc4y;
+        if (y_offset > 0.5f || y_offset < -0.5f) {
+            inc4y *= -1;
+        }
+        shader.setFloat("yOffset", y_offset);
+
+        /*
         r_inc *= getSign(r);
         g_inc *= getSign(g);
         b_inc *= getSign(b);
         r += r_inc;
         g += g_inc;
         b += b_inc;
+        */
 
         /* Swap front and back buffers */
         glfwSwapBuffers(window);
@@ -224,7 +177,7 @@ int main(void)
     GLCall(glDeleteVertexArrays(1, &VAO));
     GLCall(glDeleteBuffers(1, &VBO));
     GLCall(glDeleteBuffers(1, &EBO));
-    GLCall(glDeleteProgram(shader));
+    GLCall(glDeleteProgram(shader.ID));
 
     glfwTerminate();
     return 0;
