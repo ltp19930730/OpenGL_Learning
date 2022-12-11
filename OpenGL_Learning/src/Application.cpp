@@ -13,6 +13,8 @@
     x;\
     ASSERT(GLLogCall(#x, __FILE__, __LINE__))
 
+static void processInput(GLFWwindow * window);
+
 static void GLClearError() {
     while (glGetError() != GL_NO_ERROR);
 }
@@ -116,6 +118,10 @@ int main(void)
     if (!glfwInit())
         return -1;
 
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
     /* Create a windowed mode window and its OpenGL context */
     window = glfwCreateWindow(1080, 1080, "Hello World", NULL, NULL);
     if (!window)
@@ -145,34 +151,31 @@ int main(void)
         0, 2, 3
     };
     
-    unsigned int VAO;
+    unsigned int VBO, VAO, EBO;
+
     GLCall(glGenVertexArrays(1, &VAO));
+    GLCall(glGenBuffers(1, &VBO));
+    GLCall(glGenBuffers(1, &EBO));
+    // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
     GLCall(glBindVertexArray(VAO));
 
-    unsigned int buffer;
-    GLCall(glGenBuffers(1, &buffer));
-    GLCall(glBindBuffer(GL_ARRAY_BUFFER, buffer));
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, VBO));
     GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(positions), positions, GL_STATIC_DRAW));
 
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO));
+    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
     GLCall(glEnableVertexAttribArray(0));
     GLCall(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
-
-
-    unsigned int EBO;
-    GLCall(glGenBuffers(1, &EBO));
-    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO));
-    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
     GLCall(auto source = ParseShader("res/shaders/Basic.shader"));
     GLCall(unsigned int shader = CreateShader(source.VertextSource, source.FragmentSource));
 
     // PolygonMode
-    GLCall(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
+    // GLCall(glPolygonMode(GL_FRONT_AND_BACK, GL_LINE));
 
     // Add shader program
     GLCall(glUseProgram(shader));
-
 
     // Keep changing color for the fragment shader
     int location = glGetUniformLocation(shader, "u_Color");
@@ -180,15 +183,29 @@ int main(void)
     float r = 0.3f, g = 0.8f, b = 0.2f;
     float r_inc = 0.003f, g_inc = 0.003f, b_inc = 0.003f;
 
+    // Unblind everything
+    GLCall(glBindVertexArray(0));
+    GLCall(glUseProgram(0));
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
+
 
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
     {
+        // input
+        processInput(window);
+
         /* Render here */
         glClear(GL_COLOR_BUFFER_BIT);
 
+        GLCall(glUseProgram(shader));
         GLCall(glUniform4f(location, r, g, b, 1.0f));
+
+        GLCall(glBindVertexArray(VAO));
+
         GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0));
+
         r_inc *= getSign(r);
         g_inc *= getSign(g);
         b_inc *= getSign(b);
@@ -205,8 +222,18 @@ int main(void)
 
     // optional: de-allocate all resources once they've outlived their purpose
     GLCall(glDeleteVertexArrays(1, &VAO));
+    GLCall(glDeleteBuffers(1, &VBO));
+    GLCall(glDeleteBuffers(1, &EBO));
     GLCall(glDeleteProgram(shader));
 
     glfwTerminate();
     return 0;
+}
+
+// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
+// ---------------------------------------------------------------------------------------------------------
+static void processInput(GLFWwindow* window)
+{
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
 }
