@@ -100,6 +100,14 @@ static unsigned int CreateShader(const std::string& vertextShader,
 
     return program;
 }
+
+static int getSign(float val) {
+    if (val >= 1.0f || val <= 0.0f) {
+        return -1;
+    }
+    return 1;
+}
+
 int main(void)
 {
     GLFWwindow* window;
@@ -165,13 +173,28 @@ int main(void)
     // Add shader program
     GLCall(glUseProgram(shader));
 
+
+    // Keep changing color for the fragment shader
+    int location = glGetUniformLocation(shader, "u_Color");
+    ASSERT(location != -1);
+    float r = 0.3f, g = 0.8f, b = 0.2f;
+    float r_inc = 0.003f, g_inc = 0.003f, b_inc = 0.003f;
+
+
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
     {
         /* Render here */
         glClear(GL_COLOR_BUFFER_BIT);
 
-        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_INT, 0));
+        GLCall(glUniform4f(location, r, g, b, 1.0f));
+        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0));
+        r_inc *= getSign(r);
+        g_inc *= getSign(g);
+        b_inc *= getSign(b);
+        r += r_inc;
+        g += g_inc;
+        b += b_inc;
 
         /* Swap front and back buffers */
         glfwSwapBuffers(window);
@@ -179,7 +202,10 @@ int main(void)
         /* Poll for and process events */
         glfwPollEvents();
     }
-    GLCall(glDeleteShader(shader));
+
+    // optional: de-allocate all resources once they've outlived their purpose
+    GLCall(glDeleteVertexArrays(1, &VAO));
+    GLCall(glDeleteProgram(shader));
 
     glfwTerminate();
     return 0;
