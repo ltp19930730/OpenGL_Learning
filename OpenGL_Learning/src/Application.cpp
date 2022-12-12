@@ -1,4 +1,8 @@
 #include "Shader.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -34,6 +38,9 @@ static int getSign(float val) {
     return 1;
 }
 
+// stores how much we're seeing of either texture
+float mixValue = 0.2f;
+
 int main(void)
 {
     GLFWwindow* window;
@@ -62,19 +69,19 @@ int main(void)
     }
 
     std::cout << glGetString(GL_VERSION) << std::endl;
-
     float vertices[] = {
-         0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,   // 右下
-        -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,   // 左下
-        -0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,   // 左上
-         0.5f,  0.5f, 0.0f,  1.0f, 1.0f, 1.0f    // 右上   
+     // -----poistion----    ------color----- --texture cord---
+         0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f, 2.0f, 0.0f,  // 右下
+        -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f, 0.0f, 0.0f,  // 左下
+        -0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f, 0.0f, 2.0f,  // 左上
+         0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f, 2.0f, 2.0f   // 右上   
     };
 
     unsigned int indices[] = {
         0, 1, 2,
         0, 2, 3
     };
-    
+   
     unsigned int VBO, VAO, EBO;
 
     GLCall(glGenVertexArrays(1, &VAO));
@@ -90,11 +97,58 @@ int main(void)
     GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
     // 位置属性
-    GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0));
+    GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0));
     GLCall(glEnableVertexAttribArray(0));
     // 颜色属性
-    GLCall(glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float))));
+    GLCall(glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))));
     glEnableVertexAttribArray(1);
+    // texture cord attribute
+    GLCall(glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float))));
+    glEnableVertexAttribArray(2);
+
+    unsigned int texture1, texture2;
+
+    // load texture1 
+    glGenTextures(1, &texture1);
+    glBindTexture(GL_TEXTURE_2D, texture1);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* data = stbi_load("res/texture/container.jpg", &width, &height, &nrChannels, 0);
+    if (data) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else {
+        std::cout << "Failed to load texture" << std::endl;
+    }
+
+    stbi_image_free(data);
+
+    // load texture2
+    glGenTextures(1, &texture2);
+    glBindTexture(GL_TEXTURE_2D, texture2);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    data = stbi_load("res/texture/snowboarding.png", &width, &height, &nrChannels, 0);
+    if (data) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else {
+        std::cout << "Failed to load texture" << std::endl;
+    }
+
+    stbi_image_free(data);
 
     GLCall(auto shader = Shader("res/shaders/Basic.shader"));
 
@@ -122,13 +176,20 @@ int main(void)
     float r_inc = 0.003f, g_inc = 0.003f, b_inc = 0.003f;
     */
 
+
+    // tell opengl for each sampler to which texture unit it belongs to (only has to be done once)
+    // -------------------------------------------------------------------------------------------
+    shader.use(); // don't forget to activate/use the shader before setting uniforms!
+    // either set it manually like so:
+    shader.setInt("texture1", 0);
+    // or set it via the texture class
+    shader.setInt("texture2", 1);
+
     // Unblind everything
     GLCall(glBindVertexArray(0));
     GLCall(glUseProgram(0));
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
-
-
 
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
@@ -138,6 +199,12 @@ int main(void)
 
         /* Render here */
         glClear(GL_COLOR_BUFFER_BIT);
+
+        // Bind texture
+        GLCall(glActiveTexture(GL_TEXTURE0));
+        GLCall(glBindTexture(GL_TEXTURE_2D, texture1));
+        GLCall(glActiveTexture(GL_TEXTURE1));
+        GLCall(glBindTexture(GL_TEXTURE_2D, texture2));
 
         GLCall(shader.use());
         //GLCall(glUniform4f(location, r, g, b, 1.0f));
@@ -158,6 +225,7 @@ int main(void)
         }
         shader.setFloat("yOffset", y_offset);
 
+        shader.setFloat("mixValue", mixValue);
         /*
         r_inc *= getSign(r);
         g_inc *= getSign(g);
@@ -190,4 +258,17 @@ static void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+    {
+        mixValue += 0.01f;
+        if (mixValue >= 1.0f)
+            mixValue = 1.0f;
+    }
+    if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+    {
+        mixValue -= 0.01f;
+        if (mixValue <= 0.0f)
+            mixValue = 0.0f;
+    }
 }
